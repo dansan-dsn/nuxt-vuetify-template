@@ -48,13 +48,15 @@ export default defineNuxtPlugin((nuxtApp) => {
     },
 
     theme: {
-      defaultTheme: appConfig.theme?.dark ? "coInvestDark" : "coInvestLight",
+      defaultTheme: appConfig.theme?.dark
+        ? "NuxtVuetifyTemplateDark"
+        : "NuxtVuetifyTemplateLight",
       themes: {
-        coInvestLight: {
+        NuxtVuetifyTemplateLight: {
           dark: false,
           colors: configuredColors,
         },
-        coInvestDark: {
+        NuxtVuetifyTemplateDark: {
           dark: true,
           colors: configuredDarkColors,
         },

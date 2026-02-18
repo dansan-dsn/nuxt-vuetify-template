@@ -23,6 +23,7 @@ type NavGroup = {
 };
 
 type NavEntry = NavLeaf | NavGroup;
+
 type NavSection = {
   title: string;
   items: NavEntry[];
@@ -88,9 +89,7 @@ const navSections = [
   },
 ] satisfies NavSection[];
 
-const navItems = computed(() =>
-  navSections.flatMap((section) => section.items),
-);
+const navItems = computed(() => navSections.flatMap((s) => s.items));
 
 const isNavGroup = (item: NavEntry): item is NavGroup => "children" in item;
 
@@ -109,18 +108,13 @@ const getGroupPrimaryRoute = (item: NavGroup) => {
 
 const sectionTitle = computed(() => {
   for (const item of navItems.value) {
-    if (!isNavGroup(item) && isLeafActive(item)) {
-      return item.title;
-    }
+    if (!isNavGroup(item) && isLeafActive(item)) return item.title;
 
     if (isNavGroup(item)) {
       const match = item.children.find((child) => isLeafActive(child));
-      if (match) {
-        return `${item.title} / ${match.title}`;
-      }
+      if (match) return `${item.title} / ${match.title}`;
     }
   }
-
   return "Workspace";
 });
 
@@ -130,14 +124,11 @@ const routeLabels = computed(() => {
 
   for (const item of navItems.value) {
     if (isNavGroup(item)) {
-      for (const child of item.children) {
-        labels.set(child.to, child.title);
-      }
+      for (const child of item.children) labels.set(child.to, child.title);
       continue;
     }
     labels.set(item.to, item.title);
   }
-
   return labels;
 });
 
@@ -163,7 +154,8 @@ watchEffect(() => {
   const activeGroups = navItems.value
     .filter(isNavGroup)
     .filter(isGroupActive)
-    .map((group) => group.title);
+    .map((g) => g.title);
+
   openedGroups.value = Array.from(
     new Set([...openedGroups.value, ...activeGroups]),
   );
@@ -175,38 +167,70 @@ watch(mdAndDown, (isSmall) => {
 });
 
 watch(isRailMode, (enabled) => {
-  if (enabled) {
-    openedGroups.value = [];
-  }
+  if (enabled) openedGroups.value = [];
 });
 
 watch(
   () => route.path,
   () => {
+    if (mdAndDown.value) drawer.value = false;
+  },
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    const activeGroups = navItems.value
+      .filter(isNavGroup)
+      .filter(isGroupActive)
+      .map((g) => g.title);
+
+    openedGroups.value = activeGroups; // only keep active group open
+
     if (mdAndDown.value) {
       drawer.value = false;
     }
   },
+  { immediate: true },
 );
 
 const currentYear = new Date().getFullYear();
+const searchQuery = ref("");
 </script>
 
 <template>
   <v-layout class="app-shell">
-    <v-app-bar color="primary" class="app-bar px-2" density="comfortable">
+    <!-- Top bar (keep your theme colors) -->
+    <v-app-bar
+      color="primary"
+      class="app-bar px-2"
+      density="comfortable"
+      height="64"
+    >
       <v-app-bar-nav-icon @click="drawer = !drawer" />
+
       <div class="title-block">
         <p class="title-kicker">SACCO Platform</p>
         <p class="title-main">{{ sectionTitle }}</p>
       </div>
-      <template #append>
-        <v-btn
-          v-if="!mdAndDown"
-          :icon="rail ? 'mdi-arrow-expand-right' : 'mdi-arrow-collapse-left'"
-          variant="text"
-          @click="rail = !rail"
+
+      <v-spacer />
+
+      <div class="top-search">
+        <v-text-field
+          v-model="searchQuery"
+          density="compact"
+          variant="outlined"
+          rounded="lg"
+          hide-details
+          placeholder="Search"
+          prepend-inner-icon="mdi-magnify"
+          class="search-field"
         />
+      </div>
+
+      <template #append>
+        <v-btn icon="mdi-cog-outline" variant="text" />
         <v-badge
           color="accent"
           content="3"
@@ -216,107 +240,167 @@ const currentYear = new Date().getFullYear();
         >
           <v-btn icon="mdi-bell-outline" variant="text" />
         </v-badge>
+
         <v-chip class="ml-2" color="secondary" label size="small">Admin</v-chip>
+
+        <!-- <v-btn
+          v-if="!mdAndDown"
+          class="ml-2"
+          :icon="
+            isRailMode ? 'mdi-arrow-expand-right' : 'mdi-arrow-collapse-left'
+          "
+          variant="text"
+          @click="rail = !rail"
+        /> -->
       </template>
     </v-app-bar>
 
+    <!-- Sidebar -->
     <v-navigation-drawer
       v-model="drawer"
-      color="surface"
-      :width="276"
+      :width="284"
       :rail="isRailMode"
       :temporary="mdAndDown"
+      rail-width="78"
       mobile-breakpoint="md"
-      rail-width="72"
       class="sidebar"
     >
-      <div class="brand-block">
-        <v-avatar color="primary" size="36">
-          <v-icon icon="mdi-bank-outline" />
-        </v-avatar>
-        <div v-if="!isRailMode" class="brand-copy">
-          <p class="brand-title">{{ appConfig.title }}</p>
-          <p class="brand-subtitle">Cooperative Finance</p>
+      <!-- Brand -->
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <v-icon icon="mdi-bank-outline" size="22" />
+        </div>
+
+        <div v-if="!isRailMode" class="brand-text">
+          <div class="brand-title">{{ appConfig.title }}</div>
+          <div class="brand-sub">Cooperative Finance</div>
         </div>
       </div>
 
+      <!-- Navigation -->
       <v-list
         v-model:opened="openedGroups"
-        class="pt-2 nav-list"
-        density="comfortable"
         nav
+        density="comfortable"
+        class="sidebar-list"
       >
         <template v-for="section in navSections" :key="section.title">
-          <v-list-subheader
-            v-if="!isRailMode"
-            class="text-uppercase section-label"
-          >
+          <div v-if="!isRailMode" class="sidebar-section-title">
             {{ section.title }}
-          </v-list-subheader>
+          </div>
 
           <template v-for="item in section.items" :key="item.title">
-            <v-list-item
-              v-if="isRailMode && isNavGroup(item)"
-              :to="getGroupPrimaryRoute(item)"
-              :prepend-icon="item.icon"
-              :title="item.title"
-              rounded="lg"
-              class="mb-1 nav-item rail-item"
-              :active="isGroupActive(item)"
-            />
+            <!-- RAIL: groups become a single item (primary route) -->
+            <v-tooltip v-if="isRailMode && isNavGroup(item)" location="right">
+              <template #activator="{ props }">
+                <v-list-item
+                  v-bind="props"
+                  :to="getGroupPrimaryRoute(item)"
+                  :prepend-icon="item.icon"
+                  rounded="xl"
+                  class="nav-item"
+                  :active="isGroupActive(item)"
+                  active-class="nav-item--active"
+                />
+              </template>
+              <span>{{ item.title }}</span>
+            </v-tooltip>
 
+            <!-- GROUP -->
             <v-list-group
               v-else-if="isNavGroup(item)"
               :value="item.title"
-              class="mb-1 nav-group"
+              class="sidebar-group"
             >
               <template #activator="{ props }">
                 <v-list-item
                   v-bind="props"
                   :prepend-icon="item.icon"
                   :title="item.title"
-                  rounded="lg"
+                  rounded="xl"
+                  class="nav-item"
                   :active="isGroupActive(item)"
-                  class="nav-item group-parent"
-                  :class="{ 'group-parent-active': isGroupActive(item) }"
-                />
+                  active-class="nav-item--active"
+                >
+                  <template #append>
+                    <v-icon icon="mdi-chevron-down" class="group-chevron" />
+                  </template>
+                </v-list-item>
               </template>
 
-              <v-list-item
-                v-for="child in item.children"
-                :key="child.to"
-                :to="child.to"
-                :prepend-icon="child.icon"
-                :title="child.title"
-                rounded="lg"
-                class="mb-1 sub-item"
-                :class="{ 'sub-item-active': isLeafActive(child) }"
-                :active="isLeafActive(child)"
-              />
+              <!-- KEY: Use v-list so Vuetify structure is consistent -->
+              <v-list class="sub-list" density="compact" nav>
+                <v-list-item
+                  v-for="child in item.children"
+                  :key="child.to"
+                  :to="child.to"
+                  :title="child.title"
+                  rounded="xl"
+                  class="sub-item"
+                  :active="isLeafActive(child)"
+                  active-class="sub-item--active"
+                >
+                  <template #prepend>
+                    <v-icon :icon="child.icon" size="18" class="sub-icon" />
+                  </template>
+                </v-list-item>
+              </v-list>
             </v-list-group>
+
+            <!-- LEAF -->
+            <v-tooltip v-else-if="isRailMode" location="right">
+              <template #activator="{ props }">
+                <v-list-item
+                  v-bind="props"
+                  :to="item.to"
+                  :prepend-icon="item.icon"
+                  rounded="xl"
+                  class="nav-item"
+                  :active="isLeafActive(item)"
+                  active-class="nav-item--active"
+                />
+              </template>
+              <span>{{ item.title }}</span>
+            </v-tooltip>
 
             <v-list-item
               v-else
               :to="item.to"
               :prepend-icon="item.icon"
               :title="item.title"
-              rounded="lg"
-              class="mb-1 nav-item"
-              :class="{ 'nav-item-active': isLeafActive(item) }"
+              rounded="xl"
+              class="nav-item"
               :active="isLeafActive(item)"
+              active-class="nav-item--active"
             />
           </template>
+
+          <div class="sidebar-section-spacer" />
         </template>
       </v-list>
+
+      <!-- Bottom collapse -->
+      <!-- <div class="sidebar-bottom" v-if="!mdAndDown">
+        <v-btn
+          variant="text"
+          class="collapse-btn"
+          :icon="
+            isRailMode ? 'mdi-arrow-expand-right' : 'mdi-arrow-collapse-left'
+          "
+          @click="rail = !rail"
+        />
+      </div> -->
     </v-navigation-drawer>
 
+    <!-- Main -->
     <v-main class="content-area">
       <v-container class="py-6 content-wrap" fluid>
-        <v-breadcrumbs :items="breadcrumbs" class="px-0 pt-0" />
+        <v-breadcrumbs :items="breadcrumbs" class="px-0 pt-0 breadcrumbs" />
         <slot />
       </v-container>
     </v-main>
 
+    <!-- Footer -->
     <v-footer app border class="px-4 py-2 footer-bar">
       <div class="d-flex align-center justify-space-between w-100">
         <span class="footer-copy">{{ appConfig.title }} SACCO</span>
@@ -329,6 +413,7 @@ const currentYear = new Date().getFullYear();
 </template>
 
 <style scoped>
+/* Base */
 .app-shell {
   min-height: 100vh;
 }
@@ -347,7 +432,7 @@ const currentYear = new Date().getFullYear();
   margin: 0;
   font-size: 0.68rem;
   letter-spacing: 0.08em;
-  opacity: 0.8;
+  opacity: 0.9;
   text-transform: uppercase;
 }
 
@@ -357,98 +442,189 @@ const currentYear = new Date().getFullYear();
   font-weight: 600;
 }
 
+.top-search {
+  width: min(520px, 46vw);
+  margin-right: 0.25rem;
+}
+
+.search-field :deep(.v-field) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.search-field :deep(.v-field__outline) {
+  opacity: 0.35;
+}
+
+/* Sidebar */
 .sidebar {
+  background: rgba(var(--v-theme-surface), 1);
   border-right: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
-.brand-block {
+/* Brand */
+.sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 0.8rem 0.5rem;
+  gap: 12px;
+  padding: 18px 14px 12px;
 }
 
-.brand-copy {
-  min-width: 0;
+.brand-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(var(--v-theme-background), 1);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  box-shadow: 0 8px 18px rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .brand-title {
-  margin: 0;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.2;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
-.brand-subtitle {
-  margin: 0.1rem 0 0;
+.brand-sub {
   font-size: 0.72rem;
   opacity: 0.7;
+  margin-top: 2px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.section-label {
+/* Section labels */
+.sidebar-section-title {
+  padding: 14px 16px 8px;
   font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  opacity: 0.62;
-  padding-inline: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.58;
 }
 
-.nav-list :deep(.v-list-item) {
-  margin-inline: 0.25rem;
+.sidebar-section-spacer {
+  height: 10px;
+}
+
+/* List spacing */
+.sidebar-list :deep(.v-list-item) {
+  margin: 4px 10px;
+}
+
+/* Primary items */
+.nav-item {
+  height: 44px;
+  border-radius: 14px;
 }
 
 .nav-item :deep(.v-list-item-title) {
-  font-weight: 500;
+  font-size: 0.92rem;
+  font-weight: 600;
+  opacity: 0.84;
 }
 
 .nav-item :deep(.v-list-item__prepend) {
-  min-width: 1.42rem;
-  margin-inline-end: 0.56rem;
+  min-width: 34px;
+  opacity: 0.72;
 }
 
-.nav-group {
-  margin-bottom: 0.2rem;
+.nav-item:hover {
+  background: rgba(var(--v-theme-primary), 0.06);
 }
 
+/* Active pill */
+.nav-item--active {
+  background: rgba(var(--v-theme-primary), 1) !important;
+  color: rgb(var(--v-theme-on-primary)) !important;
+  box-shadow: 0 12px 22px rgba(var(--v-theme-primary), 0.24);
+}
+
+.nav-item--active :deep(.v-icon),
+.nav-item--active :deep(.v-list-item-title) {
+  color: rgb(var(--v-theme-on-primary)) !important;
+  opacity: 1 !important;
+}
+
+/* GROUP: kill Vuetify indentation (the golden fix) */
+.sidebar-group :deep(.v-list-group__items) {
+  padding-inline-start: 0 !important;
+  margin-inline-start: 0 !important;
+}
+
+/* Chevron */
+.group-chevron {
+  opacity: 0.55;
+}
+
+/* Sub list wrapper (creates the nice guideline + compact indent) */
+.sub-list {
+  margin: 2px 10px 8px 10px !important;
+  padding: 0 !important;
+  border-left: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* Sub items: pulled left (no wasted space) */
 .sub-item {
-  margin-left: 0.2rem;
-  padding-left: 0.2rem;
-  border-left: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  height: 40px;
+  border-radius: 12px;
+  margin: 4px 0 4px 6px !important; /* distance from guideline */
 }
 
-.sub-item :deep(.v-list-item-title) {
-  font-size: 0.86rem;
-  opacity: 0.9;
+/* Override internal padding that causes "free space" */
+.sub-item:deep(.v-list-item) {
+  padding-inline-start: 10px !important;
+  padding-inline-end: 12px !important;
+}
+
+.sub-item :deep(.v-list-item__content) {
+  padding-inline-start: 0 !important;
 }
 
 .sub-item :deep(.v-list-item__prepend) {
-  min-width: 1.28rem;
-  margin-inline-end: 0.52rem;
+  min-width: 26px !important;
+  margin-inline-end: 8px !important;
 }
 
-.group-parent-active {
-  background: rgba(var(--v-theme-secondary), 0.14);
+.sub-icon {
+  opacity: 0.65;
 }
 
-.group-parent-active :deep(.v-list-item-title),
-.group-parent-active :deep(.v-list-item__prepend .v-icon) {
-  color: rgb(var(--v-theme-secondary));
+.sub-item:hover {
+  background: rgba(var(--v-theme-primary), 0.06);
 }
 
-.sub-item-active {
-  background: rgba(var(--v-theme-primary), 0.1);
+/* Active sub item */
+.sub-item--active {
+  background: rgba(var(--v-theme-primary), 0.12) !important;
 }
 
-.sub-item-active :deep(.v-list-item-title),
-.sub-item-active :deep(.v-list-item__prepend .v-icon) {
-  color: rgb(var(--v-theme-primary));
+.sub-item--active :deep(.v-list-item-title),
+.sub-item--active :deep(.v-icon) {
+  color: rgb(var(--v-theme-primary)) !important;
+  opacity: 1 !important;
 }
 
-.nav-item-active {
-  background: rgba(var(--v-theme-primary), 0.12);
+/* Bottom collapse */
+.sidebar-bottom {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 12px 12px;
+  background: linear-gradient(
+    to top,
+    rgba(var(--v-theme-surface), 1) 70%,
+    rgba(var(--v-theme-surface), 0)
+  );
 }
 
+.collapse-btn {
+  width: 100%;
+  border-radius: 14px;
+  background: rgba(var(--v-theme-background), 1);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* Main background */
 .content-area {
   background: rgb(var(--v-theme-background));
   background-image:
@@ -471,6 +647,11 @@ const currentYear = new Date().getFullYear();
   max-width: 1320px;
 }
 
+.breadcrumbs {
+  opacity: 0.86;
+}
+
+/* Footer */
 .footer-bar {
   backdrop-filter: blur(6px);
 }

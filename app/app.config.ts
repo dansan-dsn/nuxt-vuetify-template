@@ -1,5 +1,5 @@
 export default defineAppConfig({
-  title: "CoInvest",
+  title: "NuxtVuetifyTemplate",
   theme: {
     dark: false,
     colors: {
