@@ -210,7 +210,7 @@ const searchQuery = ref("");
       <v-app-bar-nav-icon @click="drawer = !drawer" />
 
       <div class="title-block">
-        <p class="title-kicker">SACCO Platform</p>
+        <p class="title-kicker">NuxtVuetify Template</p>
         <p class="title-main">{{ sectionTitle }}</p>
       </div>
 
@@ -403,10 +403,8 @@ const searchQuery = ref("");
     <!-- Footer -->
     <v-footer app border class="px-4 py-2 footer-bar">
       <div class="d-flex align-center justify-space-between w-100">
-        <span class="footer-copy">{{ appConfig.title }} SACCO</span>
-        <span class="footer-copy"
-          >Secure Cooperative Banking • {{ currentYear }}</span
-        >
+        <span class="footer-copy">{{ appConfig.title }}</span>
+        <span class="footer-copy">v0.1 • {{ currentYear }}</span>
       </div>
     </v-footer>
   </v-layout>
